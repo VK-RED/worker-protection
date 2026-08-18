@@ -60,11 +60,15 @@ async function main() {
   const enableCommand = getProtectionCommand(instanceId, true);
   await asg.send(enableCommand);
 
+  console.log("enabled scale-in protection");
+
   await processJob();
 
   // disable scale in protection
   const disableCommand = getProtectionCommand(instanceId, false);
   await asg.send(disableCommand);
+
+  console.log("disabled scale-in protection");
 
   const state = await getInstanceState(instanceId);
 
