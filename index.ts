@@ -1,6 +1,10 @@
 import { MetadataService } from "@aws-sdk/ec2-metadata-service";
 import { AutoScalingClient, CompleteLifecycleActionCommand, DescribeAutoScalingInstancesCommand, SetInstanceProtectionCommand } from "@aws-sdk/client-auto-scaling"; // ES Modules import
 
+if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+  throw new Error("AWS CREDS NOT SET")
+}
+
 const asg = new AutoScalingClient();
 const HOOK_NAME = "test-termination-hook";
 const ASG_NAME = "test-asg";
