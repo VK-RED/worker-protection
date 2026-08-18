@@ -50,6 +50,8 @@ async function completeTermination(instanceId: string): Promise<void> {
 
 async function main() {
 
+  console.log("Worker started");
+
   const metadataService = new MetadataService({});
   const instanceId = await metadataService.request("/latest/meta-data/instance-id", {});
 
@@ -61,7 +63,7 @@ async function main() {
   await processJob();
 
   // disable scale in protection
-  const disableCommand = getProtectionCommand(instanceId, true);
+  const disableCommand = getProtectionCommand(instanceId, false);
   await asg.send(disableCommand);
 
   const state = await getInstanceState(instanceId);
@@ -70,9 +72,10 @@ async function main() {
     completeTermination(instanceId);
   }
   else {
-    console.log("State is not Terminating:Wait: ", state);
+    console.log("State is not Terminating:Wait instead it is: ", state);
   }
 
+  while (true) { }
 }
 
 main();
