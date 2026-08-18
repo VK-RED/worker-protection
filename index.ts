@@ -1,13 +1,47 @@
 import { MetadataService } from "@aws-sdk/ec2-metadata-service";
-import { AutoScalingClient, SetInstanceProtectionCommand } from "@aws-sdk/client-auto-scaling"; // ES Modules import
+import { AutoScalingClient, CompleteLifecycleActionCommand, DescribeAutoScalingInstancesCommand, SetInstanceProtectionCommand } from "@aws-sdk/client-auto-scaling"; // ES Modules import
+
+const asg = new AutoScalingClient();
+const HOOK_NAME = "test-termination-hook";
+const ASG_NAME = "test-asg";
 
 const getProtectionCommand = (instanceId: string, protect: boolean) => {
   const protectionCommand = new SetInstanceProtectionCommand({
-    AutoScalingGroupName: "test-asg",
+    AutoScalingGroupName: ASG_NAME,
     InstanceIds: [instanceId],
     ProtectedFromScaleIn: protect,
   });
   return protectionCommand;
+}
+
+const getInstanceState = async (instanceId: string) => {
+  const resp = await asg.send(
+    new DescribeAutoScalingInstancesCommand({ InstanceIds: [instanceId] })
+  );
+  return resp.AutoScalingInstances?.[0]?.LifecycleState;
+}
+
+const processJob = async () => {
+
+  let secs = 3 * 60;
+
+  while (secs > 0) {
+    console.log("Worker running");
+    await new Promise(res => setTimeout(res, 2 * 1000));
+    secs -= 2;
+  }
+}
+
+async function completeTermination(instanceId: string): Promise<void> {
+
+  await asg.send(
+    new CompleteLifecycleActionCommand({
+      LifecycleHookName: HOOK_NAME,
+      AutoScalingGroupName: ASG_NAME,
+      LifecycleActionResult: "CONTINUE",
+      InstanceId: instanceId,
+    })
+  );
 }
 
 async function main() {
@@ -15,18 +49,26 @@ async function main() {
   const metadataService = new MetadataService({});
   const instanceId = await metadataService.request("/latest/meta-data/instance-id", {});
 
-  const asClient = new AutoScalingClient();
+  // enable scale in protection
+  //TODO: Edit this to play around 
+  const enableCommand = getProtectionCommand(instanceId, true);
+  await asg.send(enableCommand);
 
-  // 0 => Protected, 1 => Not Protected
-  const protectedInstance = process.env.INSTANCE_PROTECTION ? Number(process.env.INSTANCE_PROTECTION) : 1;
-  const command = getProtectionCommand(instanceId, protectedInstance === 0);
+  await processJob();
 
-  await asClient.send(command);
+  // disable scale in protection
+  const disableCommand = getProtectionCommand(instanceId, true);
+  await asg.send(disableCommand);
 
-  while (true) {
-    console.log("Worker running");
-    await new Promise(res => setTimeout(res, 2 * 1000));
+  const state = await getInstanceState(instanceId);
+
+  if (state === "Terminating:Wait") {
+    completeTermination(instanceId);
   }
+  else {
+    console.log("State is not Terminating:Wait: ", state);
+  }
+
 }
 
 main();
